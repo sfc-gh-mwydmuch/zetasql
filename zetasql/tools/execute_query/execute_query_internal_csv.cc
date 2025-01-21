@@ -19,20 +19,63 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <algorithm>
+
+// #include "zetasql/base/logging.h"
+// #include "google/protobuf/descriptor.h"
+// #include "zetasql/analyzer/resolver.h"
+// #include "zetasql/analyzer/expr_resolver_helper.h"
+// #include "zetasql/analyzer/name_scope.h"
+// #include "zetasql/analyzer/query_resolver_helper.h"
+// #include "zetasql/parser/ast_node_kind.h"
+// #include "zetasql/parser/parse_tree.h"
+// #include "zetasql/parser/parser.h"
+// #include "zetasql/public/analyzer.h"
+// #include "zetasql/public/analyzer_options.h"
+// #include "zetasql/public/analyzer_output.h"
+// #include "zetasql/public/analyzer_output_properties.h"
+// #include "zetasql/public/catalog.h"
+// #include "zetasql/public/function.h"
+// #include "zetasql/public/function.pb.h"
+// #include "zetasql/public/id_string.h"
+// #include "zetasql/public/language_options.h"
+// #include "zetasql/public/numeric_value.h"
+// #include "zetasql/public/options.pb.h"
+// #include "zetasql/public/simple_catalog.h"
+// #include "zetasql/public/table_valued_function.h"
+// #include "zetasql/public/types/type.h"
+// #include "zetasql/public/types/type_factory.h"
+// #include "zetasql/public/value.h"
 
 #include "zetasql/public/simple_catalog.h"
-#include "zetasql/public/type.h"
-#include "zetasql/public/value.h"
 #include "absl/memory/memory.h"
 #include "absl/status/status.h"
 #include "absl/status/statusor.h"
 #include "absl/strings/string_view.h"
+#include "absl/strings/str_split.h"
 #include "absl/types/optional.h"
 #include "riegeli/bytes/fd_reader.h"
 #include "riegeli/csv/csv_reader.h"
 #include "zetasql/base/status_macros.h"
 
 namespace zetasql {
+
+// Based on TestCastExpression from resolver_test.cc
+// Value CastValueToType(std::string& value, const Type* cast_type) {
+//   std::string type_name = cast_type->ShortTypeName(ProductMode::PRODUCT_INTERNAL);
+//   std::string cast_expression = "CAST('" + value + "' AS " + type_name + ")";
+//   std::string error_expression = "Failed to parse " + type_name + " value: " + value;
+  
+//   // TO DO: Handle errors
+//   std::unique_ptr<ParserOutput> parser_output;
+//   std::unique_ptr<const ResolvedExpr> resolved_expression;
+//   ParseExpression(cast_expression, ParserOptions(), &parser_output);
+//   const ASTExpression* parsed_expression = parser_output->expression();
+//   ResolveExpr(parsed_expression, &resolved_expression);
+//   Value result;
+//   result.CopyFrom(resolved_expression.get());
+//   return result;
+// }
 
 absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
     absl::string_view table_name, absl::string_view path) {
@@ -47,7 +90,70 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
   std::vector<SimpleTable::NameAndType> columns;
   columns.reserve(record.size());
   for (const std::string& column_name : record) {
-    columns.emplace_back(column_name, types::StringType());
+    // Identify type
+    std::vector<std::string> parts = absl::StrSplit(column_name, ':');
+
+    // If there is no type, default to string
+    if (parts.size() != 2){
+      columns.emplace_back(column_name, types::StringType());
+      continue;
+    }
+
+    // Supported types
+    /*
+    const Type* Int32Type() { return s_int32_type(); }
+    const Type* Int64Type() { return s_int64_type(); }
+    const Type* Uint32Type() { return s_uint32_type(); }
+    const Type* Uint64Type() { return s_uint64_type(); }
+    const Type* BoolType() { return s_bool_type(); }
+    const Type* FloatType() { return s_float_type(); }
+    const Type* DoubleType() { return s_double_type(); }
+    const Type* StringType() { return s_string_type(); }
+    const Type* DateType() { return s_date_type(); }
+    const Type* TimestampType() { return s_timestamp_type(); }
+    const Type* TimestampPicosType() { return s_timestamp_picos_type(); }
+    const Type* TimeType() { return s_time_type(); }
+    const Type* DatetimeType() { return s_datetime_type(); }
+    */
+
+    const std::string& name = parts[0];
+    std::string& type_str = parts[1];
+    std::transform(type_str.begin(), type_str.end(), type_str.begin(), ::toupper);
+    const Type* type;
+    if (type_str == "STRING") {
+      type = types::StringType();
+    } else if (type_str == "INT64") {
+      type = types::Int64Type();
+    } else if (type_str == "INT32") {
+      type = types::Int32Type();
+    } else if (type_str == "UINT64") {
+      type = types::Uint64Type();
+    } else if (type_str == "UINT32") {
+      type = types::Uint32Type();
+    } else if (type_str == "FLOAT") {
+      type = types::FloatType();
+    } else if (type_str == "DOUBLE") {
+      type = types::DoubleType();
+    } else if (type_str == "BOOL") {
+      type = types::BoolType();
+    } else if (type_str == "DATE") {
+      type = types::DateType();
+    } else if (type_str == "TIMESTAMP") {
+      type = types::TimestampType();
+    } else if (type_str == "TIME") {
+      type = types::TimeType();
+    } else if (type_str == "DATETIME") {
+      type = types::DatetimeType();
+    } else {
+      // TODO: Add optiono to parse all the types using parse ParseType
+      // absl::Status ParseType(absl::string_view type_string,
+      //                  const ParserOptions& parser_options_in,
+      //                  std::unique_ptr<ParserOutput>* output);
+
+      return zetasql_base::UnknownErrorBuilder()
+       << "Unsupported type: " << type_str;
+    }
+    columns.emplace_back(name, type);
   }
 
   std::vector<std::vector<Value>> contents;
@@ -61,8 +167,76 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
     }
     std::vector<Value>& row = contents.emplace_back();
     row.reserve(record.size());
-    for (const std::string& field : record) {
-      row.push_back(Value::String(field));
+    for (int i = 0; i < record.size(); ++i) {
+      const std::string& field = record[i];
+      const Type* type = columns[i].second;
+
+      if (type == types::StringType()) {
+        row.push_back(Value::String(field));
+
+      // Handle basic types natively for performance
+      } else if (type == types::Int64Type()) {
+        int64_t int_value;
+        if (!absl::SimpleAtoi(field, &int_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse INT64 value: " << field;
+        }
+        row.push_back(Value::Int64(int_value));
+      } else if (type == types::Int32Type()) {
+        int32_t int_value;
+        if (!absl::SimpleAtoi(field, &int_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse INT32 value: " << field;
+        }
+        row.push_back(Value::Int32(int_value));
+      } else if (type == types::Uint64Type()) {
+        uint64_t uint_value;
+        if (!absl::SimpleAtoi(field, &uint_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse UINT64 value: " << field;
+        }
+        row.push_back(Value::Uint64(uint_value));
+      } else if (type == types::Uint32Type()) {
+        uint32_t uint_value;
+        if (!absl::SimpleAtoi(field, &uint_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse UINT32 value: " << field;
+        }
+        row.push_back(Value::Uint32(uint_value));
+      } else if (type == types::FloatType()) {
+        float float_value;
+        if (!absl::SimpleAtof(field, &float_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse FLOAT value: " << field;
+        }
+        row.push_back(Value::Float(float_value));
+      } else if (type == types::DoubleType()) {
+        double double_value;
+        if (!absl::SimpleAtod(field, &double_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse DOUBLE value: " << field;
+        }
+        row.push_back(Value::Double(double_value));
+      } else if (type == types::BoolType()) {
+        bool bool_value;
+        if (!absl::SimpleAtob(field, &bool_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse BOOL value: " << field;
+        }
+        row.push_back(Value::Bool(bool_value));
+      } else if (type == types::DateType()) {
+        int64_t date_value;
+        if (!absl::SimpleAtoi(field, &date_value)) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse DATE value: " << field;
+        }
+      } else {
+        // Fall back using the cast expression
+        // Value value = CastValueToType(field, type);
+        // row.push_back(value);
+        return zetasql_base::UnknownErrorBuilder()
+           << "Unsupported type: " << type->DebugString();
+      }
     }
   }
   if (!csv_reader.Close()) return csv_reader.status();
