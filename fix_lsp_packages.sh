@@ -10,10 +10,12 @@
 #importpath = "go.lsp.dev/pkg",
 #importpath = "github.com/go-language-server/pkg",
 
-find . -type f -name "*.bzl" -exec sed -i '' 's/go.lsp.dev/github.com\/go-language-server/g' {} +
-bazel --output_user_root ./.bazel_cache fetch -c opt //zetasql/tools/execute_query:execute_query
-find . -type f -name "*.bzl" -exec sed -i '' 's/go.lsp.dev/github.com\/go-language-server/g' {} +
-find . -type f -name "*.go" -exec sed -i '' 's/go.lsp.dev/github.com\/go-language-server/g' {} +
-find . -type f -name "*.mod" -exec sed -i '' 's/go.lsp.dev/github.com\/go-language-server/g' {} +
-find . -type f -name "*.sum" -exec sed -i '' 's/go.lsp.dev/github.com\/go-language-server/g' {} +
-find . -type f -name "*.yml" -exec sed -i '' 's/go.lsp.dev/github.com\/go-language-server/g' {} +
+BAZEL_CACHE=./.bazel_cache
+bazel --output_user_root ${BAZEL_CACHE} fetch -c opt //zetasql/tools/execute_query:execute_query
+find . -type f -name "*.bzl" -exec sed -i 's/go.lsp.dev/github.com\/go-language-server/g' {} +
+find . -type f -name "*.go" -exec sed -i 's/go.lsp.dev/github.com\/go-language-server/g' {} +
+find . -type f -name "*.mod" -exec sed -i 's/go.lsp.dev/github.com\/go-language-server/g' {} +
+find . -type f -name "*.sum" -exec sed -i 's/go.lsp.dev/github.com\/go-language-server/g' {} +
+find . -type f -name "*.yml" -exec sed -i 's/go.lsp.dev/github.com\/go-language-server/g' {} +
+FUTURE_DATE=$(date +%s -d "+10 years")
+find ${BAZEL_CACHE}/install -type f -exec touch --date=@${FUTURE_DATE} {} +

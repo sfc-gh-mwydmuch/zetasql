@@ -21,13 +21,20 @@ MODE=$1
 
 CC=/usr/bin/gcc
 CXX=/usr/bin/g++
+BAZEL_USER_ROOT=./.bazel_cache
+echo "MODE: $MODE"
 
+find . -type f -name "*.bzl" -exec sed -i 's/go.lsp.dev/github.com\/go-language-server/g' {} +
 if [ "$MODE" = "build" ]; then
   # Build everything.
-  bazel build ${BAZEL_ARGS} -c opt ...
+  bazel --output_user_root ${BAZEL_USER_ROOT} fetch -c opt ...
+  bash ./fix_lsp_packages.sh
+  bazel --output_user_root ${BAZEL_USER_ROOT} build ${BAZEL_ARGS} --nofetch -c opt ...
 elif [ "$MODE" = "execute_query" ]; then
   # Install the execute_query tool.
-  bazel build ${BAZEL_ARGS} -c opt --dynamic_mode=off //zetasql/tools/execute_query:execute_query
+  bazel --output_user_root ${BAZEL_USER_ROOT} fetch -c opt //zetasql/tools/execute_query:execute_query
+  bash ./fix_lsp_packages.sh
+  bazel --output_user_root ${BAZEL_USER_ROOT} build ${BAZEL_ARGS} --nofetch -c opt --dynamic_mode=off //zetasql/tools/execute_query:execute_query
   # Move the generated binary to the home directory so that users can run it
   # directly.
   cp /zetasql/bazel-bin/zetasql/tools/execute_query/execute_query $HOME/bin/execute_query
