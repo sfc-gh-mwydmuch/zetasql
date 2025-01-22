@@ -59,23 +59,11 @@
 #include "zetasql/base/status_macros.h"
 
 namespace zetasql {
+          
+#define FAIL_ON_VALUE_PARSE false
+#define HANDLE_ABSL_STATUS(status, type, field) if (FAIL_ON_VALUE_PARSE && !status.ok()) {return zetasql_base::UnknownErrorBuilder() << "Failed to parse " << type << " value: " << field;}
+#define HANDLE_BOOL_STATUS(status, type, field) if (FAIL_ON_VALUE_PARSE && !status) {return zetasql_base::UnknownErrorBuilder() << "Failed to parse " << type << " value: " << field;}
 
-// Based on TestCastExpression from resolver_test.cc
-// Value CastValueToType(std::string& value, const Type* cast_type) {
-//   std::string type_name = cast_type->ShortTypeName(ProductMode::PRODUCT_INTERNAL);
-//   std::string cast_expression = "CAST('" + value + "' AS " + type_name + ")";
-//   std::string error_expression = "Failed to parse " + type_name + " value: " + value;
-  
-//   // TO DO: Handle errors
-//   std::unique_ptr<ParserOutput> parser_output;
-//   std::unique_ptr<const ResolvedExpr> resolved_expression;
-//   ParseExpression(cast_expression, ParserOptions(), &parser_output);
-//   const ASTExpression* parsed_expression = parser_output->expression();
-//   ResolveExpr(parsed_expression, &resolved_expression);
-//   Value result;
-//   result.CopyFrom(resolved_expression.get());
-//   return result;
-// }
 
 absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
     absl::string_view table_name, absl::string_view path) {
@@ -123,9 +111,9 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
     std::string& type_str = parts[1];
     std::transform(type_str.begin(), type_str.end(), type_str.begin(), ::toupper);
     const Type* type;
-    if (type_str == "STRING") {
+    if (type_str == "STRING" || type_str == "TEXT" || type_str == "STR") {
       type = types::StringType();
-    } else if (type_str == "INT64") {
+    } else if (type_str == "INT64" || type_str == "INT") {
       type = types::Int64Type();
     } else if (type_str == "INT32") {
       type = types::Int32Type();
@@ -183,89 +171,76 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
 
       if (type == types::StringType()) {
         row.push_back(Value::String(field));
+      } else if (field == "null" || field == "") {
+        row.push_back(Value::Null(type));
 
       // Handle basic types natively for performance
       } else if (type == types::Int64Type()) {
         int64_t int_value;
-        if (!absl::SimpleAtoi(field, &int_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse INT64 value: " << field;
-        }
-        row.push_back(Value::Int64(int_value));
+        bool status = absl::SimpleAtoi(field, &int_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Int64(int_value));
       } else if (type == types::Int32Type()) {
         int32_t int_value;
-        if (!absl::SimpleAtoi(field, &int_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse INT32 value: " << field;
-        }
-        row.push_back(Value::Int32(int_value));
+        bool status = absl::SimpleAtoi(field, &int_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Int32(int_value));
       } else if (type == types::Uint64Type()) {
         uint64_t uint_value;
-        if (!absl::SimpleAtoi(field, &uint_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse UINT64 value: " << field;
-        }
-        row.push_back(Value::Uint64(uint_value));
+        bool status = absl::SimpleAtoi(field, &uint_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Uint64(uint_value));
       } else if (type == types::Uint32Type()) {
         uint32_t uint_value;
-        if (!absl::SimpleAtoi(field, &uint_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse UINT32 value: " << field;
-        }
-        row.push_back(Value::Uint32(uint_value));
+        bool status = absl::SimpleAtoi(field, &uint_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Uint32(uint_value));
       } else if (type == types::FloatType()) {
         float float_value;
-        if (!absl::SimpleAtof(field, &float_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse FLOAT value: " << field;
-        }
-        row.push_back(Value::Float(float_value));
+        bool status = absl::SimpleAtof(field, &float_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Float(float_value));
       } else if (type == types::DoubleType()) {
         double double_value;
-        if (!absl::SimpleAtod(field, &double_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse DOUBLE value: " << field;
-        }
-        row.push_back(Value::Double(double_value));
+        bool status = absl::SimpleAtod(field, &double_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Double(double_value));
       } else if (type == types::BoolType()) {
         bool bool_value;
-        if (!absl::SimpleAtob(field, &bool_value)) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse BOOL value: " << field;
-        }
-        row.push_back(Value::Bool(bool_value));
+        bool status = absl::SimpleAtob(field, &bool_value);
+        HANDLE_BOOL_STATUS(status, type, field)
+        if (!status) row.push_back(Value::Null(type));
+        else row.push_back(Value::Bool(bool_value));
       } else if (type == types::TimeType()) {
         TimeValue time;
         absl::Status status = functions::ConvertStringToTime(field, scale, &time);
-        if (!status.ok()) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse TIME value: " << field;
-        }
-        row.push_back(Value::Time(time));
+        HANDLE_ABSL_STATUS(status, type, field)
+        if (!status.ok()) row.push_back(Value::Null(type));
+        else row.push_back(Value::Time(time));
       } else if (type == types::DatetimeType()) {
         DatetimeValue datetime;
         absl::Status status = functions::ConvertStringToDatetime(field, scale, &datetime);
-        if (!status.ok()) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse DATETIME value: " << field;
-        }
-        row.push_back(Value::Datetime(datetime));
+        HANDLE_ABSL_STATUS(status, type, field)
+        if (!status.ok()) row.push_back(Value::Null(type));
+        else row.push_back(Value::Datetime(datetime));
       } else if (type == types::TimestampType()) {
         absl::Time timestamp;
         absl::Status status = functions::ConvertStringToTimestamp(field, absl::UTCTimeZone(), scale, true /* allow_tz_in_str */, &timestamp);
-        if (!status.ok()) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse TIMESTAMP value: " << field;
-        }
-        row.push_back(Value::Timestamp(timestamp));
+        HANDLE_ABSL_STATUS(status, type, field)
+        if (!status.ok()) row.push_back(Value::Null(type));
+        else row.push_back(Value::Timestamp(timestamp));
       } else if (type == types::DateType()) {
         int32_t date;
         absl::Status status = functions::ConvertStringToDate(field, &date);
-        if (!status.ok()) {
-          return zetasql_base::UnknownErrorBuilder()
-            << "Failed to parse DATE value: " << field;
-        }
-        row.push_back(Value::Date(date));
+        HANDLE_ABSL_STATUS(status, type, field)
+        if (!status.ok()) row.push_back(Value::Null(type));
+        else row.push_back(Value::Date(date));
       } else {
         return zetasql_base::UnknownErrorBuilder()
             << "Error casting " << field << " to " << type->DebugString();
