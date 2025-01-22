@@ -113,6 +113,7 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
     const Type* FloatType() { return s_float_type(); }
     const Type* DoubleType() { return s_double_type(); }
     const Type* StringType() { return s_string_type(); }
+    const Type* TimeType() { return s_time_type(); }
     const Type* DateType() { return s_date_type(); }
     const Type* TimestampType() { return s_timestamp_type(); }
     const Type* DatetimeType() { return s_datetime_type(); }
@@ -132,9 +133,9 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
       type = types::Uint64Type();
     } else if (type_str == "UINT32") {
       type = types::Uint32Type();
-    } else if (type_str == "FLOAT") {
+    } else if (type_str == "FLOAT" || type_str == "FLOAT32") {
       type = types::FloatType();
-    } else if (type_str == "DOUBLE") {
+    } else if (type_str == "DOUBLE" || type_str == "FLOAT64") {
       type = types::DoubleType();
     } else if (type_str == "BOOL") {
       type = types::BoolType();
@@ -162,7 +163,6 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
       */
       return zetasql_base::UnknownErrorBuilder() << "Unsupported type: " << type_str;
     }
-    std::cout << "Parsed type: " << type_str << " to " << type->ShortTypeName(ProductMode::PRODUCT_INTERNAL) << std::endl;
     columns.emplace_back(name, type);
   }
 
