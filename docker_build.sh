@@ -33,8 +33,11 @@ if [ "$MODE" = "build" ]; then
 elif [ "$MODE" = "execute_query" ]; then
   # Install the execute_query tool.
   bazel --output_user_root ${BAZEL_USER_ROOT} fetch -c opt //zetasql/tools/execute_query:execute_query
-  bash ./fix_lsp_packages.sh
+  bash ./fix_lsp_packages.sh ${BAZEL_USER_ROOT}
+
+  # bazel --output_user_root ./.bazel_cache build --nofetch -c opt --dynamic_mode=off //zetasql/tools/execute_query:execute_query
   bazel --output_user_root ${BAZEL_USER_ROOT} build ${BAZEL_ARGS} --nofetch -c opt --dynamic_mode=off //zetasql/tools/execute_query:execute_query
+  
   # Move the generated binary to the home directory so that users can run it
   # directly.
   cp /zetasql/bazel-bin/zetasql/tools/execute_query/execute_query $HOME/bin/execute_query
@@ -45,3 +48,4 @@ else
   echo "Supported modes are: build, execute_query"
   exit 1
 fi
+

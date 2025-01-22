@@ -16,36 +16,36 @@
 
 #include <fcntl.h>
 
+#include <iostream>
 #include <memory>
 #include <string>
 #include <vector>
 #include <algorithm>
 
-// #include "zetasql/base/logging.h"
-// #include "google/protobuf/descriptor.h"
-// #include "zetasql/analyzer/resolver.h"
-// #include "zetasql/analyzer/expr_resolver_helper.h"
-// #include "zetasql/analyzer/name_scope.h"
-// #include "zetasql/analyzer/query_resolver_helper.h"
-// #include "zetasql/parser/ast_node_kind.h"
-// #include "zetasql/parser/parse_tree.h"
-// #include "zetasql/parser/parser.h"
-// #include "zetasql/public/analyzer.h"
-// #include "zetasql/public/analyzer_options.h"
-// #include "zetasql/public/analyzer_output.h"
-// #include "zetasql/public/analyzer_output_properties.h"
-// #include "zetasql/public/catalog.h"
-// #include "zetasql/public/function.h"
-// #include "zetasql/public/function.pb.h"
-// #include "zetasql/public/id_string.h"
-// #include "zetasql/public/language_options.h"
-// #include "zetasql/public/numeric_value.h"
-// #include "zetasql/public/options.pb.h"
-// #include "zetasql/public/simple_catalog.h"
-// #include "zetasql/public/table_valued_function.h"
-// #include "zetasql/public/types/type.h"
-// #include "zetasql/public/types/type_factory.h"
-// #include "zetasql/public/value.h"
+#include "zetasql/base/logging.h"
+#include "google/protobuf/descriptor.h"
+#include "zetasql/analyzer/resolver.h"
+#include "zetasql/parser/parser.h"
+#include "zetasql/public/analyzer.h"
+#include "zetasql/public/analyzer_options.h"
+#include "zetasql/public/analyzer_output.h"
+#include "zetasql/public/analyzer_output_properties.h"
+#include "zetasql/public/catalog.h"
+#include "zetasql/public/numeric_value.h"
+#include "zetasql/public/simple_catalog.h"
+#include "zetasql/public/types/type.h"
+#include "zetasql/public/types/type_factory.h"
+#include "zetasql/public/value.h"
+#include "zetasql/public/cast.h"
+#include "zetasql/public/functions/cast_date_time.h"
+#include "zetasql/public/functions/convert.h"
+#include "zetasql/public/functions/convert_proto.h"
+#include "zetasql/public/functions/convert_string.h"
+#include "zetasql/public/functions/convert_string_with_format.h"
+#include "zetasql/public/functions/date_time_util.h"
+#include "zetasql/public/functions/datetime.pb.h"
+#include "zetasql/public/functions/range.h"
+#include "zetasql/public/functions/string.h"
 
 #include "zetasql/public/simple_catalog.h"
 #include "absl/memory/memory.h"
@@ -89,6 +89,10 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
   }
   std::vector<SimpleTable::NameAndType> columns;
   columns.reserve(record.size());
+  functions::TimestampScale scale = functions::kMicroseconds;
+
+  //Resolver resolver(nullptr, new TypeFactory(TypeFactoryOptions()), new AnalyzerOptions());
+
   for (const std::string& column_name : record) {
     // Identify type
     std::vector<std::string> parts = absl::StrSplit(column_name, ':');
@@ -99,7 +103,7 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
       continue;
     }
 
-    // Supported types
+    // Explicitly supported types
     /*
     const Type* Int32Type() { return s_int32_type(); }
     const Type* Int64Type() { return s_int64_type(); }
@@ -111,8 +115,6 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
     const Type* StringType() { return s_string_type(); }
     const Type* DateType() { return s_date_type(); }
     const Type* TimestampType() { return s_timestamp_type(); }
-    const Type* TimestampPicosType() { return s_timestamp_picos_type(); }
-    const Type* TimeType() { return s_time_type(); }
     const Type* DatetimeType() { return s_datetime_type(); }
     */
 
@@ -136,23 +138,31 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
       type = types::DoubleType();
     } else if (type_str == "BOOL") {
       type = types::BoolType();
+    } else if (type_str == "TIME") {
+      type = types::TimeType();
     } else if (type_str == "DATE") {
       type = types::DateType();
     } else if (type_str == "TIMESTAMP") {
       type = types::TimestampType();
-    } else if (type_str == "TIME") {
-      type = types::TimeType();
     } else if (type_str == "DATETIME") {
       type = types::DatetimeType();
     } else {
-      // TODO: Add optiono to parse all the types using parse ParseType
-      // absl::Status ParseType(absl::string_view type_string,
-      //                  const ParserOptions& parser_options_in,
-      //                  std::unique_ptr<ParserOutput>* output);
-
-      return zetasql_base::UnknownErrorBuilder()
-       << "Unsupported type: " << type_str;
+      /*
+      // Fall back to parsing the type
+      std::unique_ptr<ParserOutput> parser_output;
+      absl::Status parser_status, resolver_status;
+      parser_status = ParseType(type_str, ParserOptions(), &parser_output);
+      if (!parser_status.ok()) {
+        resolver_status = resolver.ResolveType(parser_output->type(), {.allow_type_parameters = true, .allow_collation = true}, type, nullptr);
+      }
+      
+      if (!parser_status.ok() || !resolver_status.ok()) {
+        return zetasql_base::UnknownErrorBuilder() << "Unsupported/failed to parse type: " << type_str;
+      }
+      */
+      return zetasql_base::UnknownErrorBuilder() << "Unsupported type: " << type_str;
     }
+    std::cout << "Parsed type: " << type_str << " to " << type->ShortTypeName(ProductMode::PRODUCT_INTERNAL) << std::endl;
     columns.emplace_back(name, type);
   }
 
@@ -224,18 +234,58 @@ absl::StatusOr<std::unique_ptr<SimpleTable>> MakeTableFromCsvFile(
             << "Failed to parse BOOL value: " << field;
         }
         row.push_back(Value::Bool(bool_value));
+      } else if (type == types::TimeType()) {
+        TimeValue time;
+        absl::Status status = functions::ConvertStringToTime(field, scale, &time);
+        if (!status.ok()) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse TIME value: " << field;
+        }
+        row.push_back(Value::Time(time));
+      } else if (type == types::DatetimeType()) {
+        DatetimeValue datetime;
+        absl::Status status = functions::ConvertStringToDatetime(field, scale, &datetime);
+        if (!status.ok()) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse DATETIME value: " << field;
+        }
+        row.push_back(Value::Datetime(datetime));
+      } else if (type == types::TimestampType()) {
+        absl::Time timestamp;
+        absl::Status status = functions::ConvertStringToTimestamp(field, absl::UTCTimeZone(), scale, true /* allow_tz_in_str */, &timestamp);
+        if (!status.ok()) {
+          return zetasql_base::UnknownErrorBuilder()
+            << "Failed to parse TIMESTAMP value: " << field;
+        }
+        row.push_back(Value::Timestamp(timestamp));
       } else if (type == types::DateType()) {
-        int64_t date_value;
-        if (!absl::SimpleAtoi(field, &date_value)) {
+        int32_t date;
+        absl::Status status = functions::ConvertStringToDate(field, &date);
+        if (!status.ok()) {
           return zetasql_base::UnknownErrorBuilder()
             << "Failed to parse DATE value: " << field;
         }
+        row.push_back(Value::Date(date));
       } else {
-        // Fall back using the cast expression
-        // Value value = CastValueToType(field, type);
-        // row.push_back(value);
         return zetasql_base::UnknownErrorBuilder()
-           << "Unsupported type: " << type->DebugString();
+            << "Error casting " << field << " to " << type->DebugString();
+          /*
+          // Fall back using the cast expression
+          std::string type_name = type->ShortTypeName(ProductMode::PRODUCT_INTERNAL);
+          std::string cast_expression = "CAST('" + field + "' AS " + type_name + ")";
+    
+          std::unique_ptr<ParserOutput> parser_output;
+          std::unique_ptr<const ResolvedExpr> resolved_expression;
+          absl::Status parser_status, resolver_status;
+          parser_status = ParseExpression(cast_expression, ParserOptions(), &parser_output);
+          resolver_status = resolver.ResolveExpr(parser_output->expression(), &resolved_expression);
+          if (!parser_status.ok() || !resolver_status.ok()) {    
+
+          }
+          Value any_value;
+          any_value.copy_from(resolved_expression.get());
+          row.push_back(any_value);
+          */
       }
     }
   }
